@@ -1,0 +1,208 @@
+service: express-lambda-cognito-dynamodb
+
+useDotenv: true
+
+provider:
+  name: aws
+  runtime: nodejs18.x
+  region: us-east-1  # Set your preferred region
+  environment:
+    COGNITO_USER_POOL_ID: ${env:COGNITO_USER_POOL_ID}  # Reference Cognito User Pool ID from environment variables or .env file
+    DYNAMODB_TABLE_NAME: ${opt:tableName, 'Groups'}  # DynamoDB table name, defaults to 'Groups'
+    COGNITO_CLIENT_ID: ${env:COGNITO_CLIENT_ID}  # Cognito App Client ID
+    # COGNITO_CLIENT_SECRET: ${env:COGNITO_CLIENT_SECRET}  # Cognito App Client Secret (should be handled securely)
+
+  iamRoleStatements:
+    - Effect: Allow
+      Action:
+        - cognito-idp:CreateUserPool  # Allow creating a Cognito User Pool
+        - cognito-idp:CreateGroup     # Allow creating groups in the User Pool
+        - cognito-idp:AdminCreateUser # Allow creating users in the User Pool
+        - cognito-idp:AdminAddUserToGroup # Allow adding users to groups
+        - cognito-idp:ForgotPassword  # Allow initiating password reset
+        - cognito-idp:ConfirmForgotPassword # Allow confirming the password reset
+        - cognito-idp:AdminConfirmSignUp  # Allow confirming user sign-up
+        - cognito-idp:AdminSetUserPassword  # Allow setting user passwords
+        - cognito-idp:AdminListGroupsForUser # Allow listing groups a user belongs to
+        - cognito-idp:AdminRemoveUserFromGroup # Allow removing a user from groups
+        - cognito-idp:AdminInitiateAuth # Allow authentication using AdminInitiateAuth
+        - cognito-idp:ListGroups   # Allow ListGroups permission
+      Resource: arn:aws:cognito-idp:${self:provider.region}:${aws:accountId}:userpool/*  # Allow interaction with all Cognito User Pools
+
+    - Effect: Allow
+      Action:
+        - dynamodb:PutItem  # Allow inserting items into DynamoDB
+        - dynamodb:DescribeTable  # Allow describing DynamoDB table
+      Resource: arn:aws:dynamodb:${self:provider.region}:${aws:accountId}:table/${self:provider.environment.DYNAMODB_TABLE_NAME}  # Reference DynamoDB table from environment
+
+functions:
+  checkAPI:
+    handler: src/handler.handler  # Path to your Lambda handler
+    events:
+      - http:
+          path: /{proxy+}  # Allow all HTTP paths (proxy mode)
+          method: post  # POST method
+          cors: true  # Enable CORS for cross-origin requests
+   
+  chechList:
+    handler: src/handler.handler  # Path to your Lambda handler
+    events:
+      - http:
+          path: /{proxy+}  # Allow all HTTP paths (proxy mode)
+          method: get  # POST method
+          cors: true  # Enable CORS for cross-origin requests
+resources:
+  Resources:
+    # Create the Cognito User Pool
+    UserPool:
+      Type: AWS::Cognito::UserPool
+      Properties:
+        UserPoolName: MyCognitoUserPool   # The name of your user pool
+        Policies:
+          PasswordPolicy:
+            MinimumLength: 8  # Minimum password length
+            RequireUppercase: true  # Require at least one uppercase letter
+            RequireLowercase: true  # Require at least one lowercase letter
+            RequireNumbers: true  # Require at least one number
+            RequireSymbols: true  # Require at least one symbol
+        AutoVerifiedAttributes:
+          - email  # Auto-verify the email attribute when users sign up
+        MfaConfiguration: OFF  # Disable MFA for simplicity (can be set to ON/OPTIONAL based on your needs)
+        VerificationMessageTemplate:
+          DefaultEmailOption: CONFIRM_WITH_CODE  # Send verification code via email
+        LambdaConfig: {}  # Optional: add Lambda triggers if needed (e.g., Pre-Signup, Post-Confirmation)
+
+    # Create the Cognito User Pool Client (App Client)
+    UserPoolClient:
+      Type: AWS::Cognito::UserPoolClient
+      Properties:
+        ClientName: MyCognitoAppClient   # The name of your app client
+        UserPoolId: !Ref UserPool  # Reference the User Pool created above
+        GenerateSecret: false  # Set to true if you need a client secret
+        ExplicitAuthFlows:
+          - ADMIN_NO_SRP_AUTH  # Admin authentication flow (no SRP)
+          - USER_PASSWORD_AUTH  # Allow user/password authentication flow
+        SupportedIdentityProviders:
+          - COGNITO  # Allow Cognito as the identity provider
+        CallbackURLs:
+          - "https://example.com"  # Your app's callback URL after successful login
+        LogoutURLs:
+          - "https://example.com/logout"  # Your app's logout URL
+
+    # DynamoDB Table
+    GroupsTable:  # Static resource name
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:provider.environment.DYNAMODB_TABLE_NAME}  # Use the table name from the environment variable
+        AttributeDefinitions:
+          - AttributeName: groupId
+            AttributeType: S  # Define the 'groupId' as a string attribute
+        KeySchema:
+          - AttributeName: groupId
+            KeyType: HASH  # Define 'groupId' as the partition key (HASH key)
+        ProvisionedThroughput:
+          ReadCapacityUnits: 5  # Read capacity units
+          WriteCapacityUnits: 5  # Write capacity units
+        StreamSpecification:
+          StreamViewType: NEW_AND_OLD_IMAGES  # Capture both old and new images of items in the stream
+
+  Outputs:
+    UserPoolId:
+      Value: !Ref UserPool  # Export the User Pool ID for use elsewhere
+      Export:
+        Name: UserPoolId
+
+    UserPoolClientId:
+      Value: !Ref UserPoolClient  # Export the App Client ID for use elsewhere
+      Export:
+        Name: UserPoolClientId
+
+plugins:
+  - serverless-offline  # Plugin for local development and testing
+
+package:
+  include:
+    - .env  # Include the .env file with environment variables
+    - node_modules/**  # Include node_modules directory for dependencies
+
+
+
+
+
+
+
+
+
+
+
+
+# service: express-lambda-cognito-dynamodb
+
+# useDotenv: true
+
+# provider:
+#   name: aws
+#   runtime: nodejs18.x
+#   region: us-east-1
+#   environment:
+#     COGNITO_USER_POOL_ID: ${env:COGNITO_USER_POOL_ID}
+#     DYNAMODB_TABLE_NAME: ${opt:tableName, 'Groups'}
+#     # DYNAMODB_TABLE_NAME: ${env:DYNAMODB_TABLE_NAME}
+#     COGNITO_CLIENT_ID: ${env:COGNITO_CLIENT_ID}
+#     COGNITO_CLIENT_SECRET: ${env:COGNITO_CLIENT_SECRET}
+#   iamRoleStatements:
+#     - Effect: Allow
+#       Action:
+#         - cognito-idp:CreateUserPool  # Allow CreateUserPool action
+#         - cognito-idp:CreateGroup        # Allow CreateGroup action
+#         - cognito-idp:AdminCreateUser    # Allow AdminCreateUser action if you need to create users
+#         - cognito-idp:AdminAddUserToGroup  # Allow AdminAddUserToGroup action if adding users to group
+#         - cognito-idp:ForgotPassword        # Add ForgotPassword permission
+#         - cognito-idp:ConfirmForgotPassword  # Add ConfirmForgotPassword permission
+#         - cognito-idp:AdminConfirmSignUp
+#         - cognito-idp:AdminSetUserPassword
+#         - cognito-idp:AdminListGroupsForUser
+#         - cognito-idp:AdminRemoveUserFromGroup
+#       Resource: arn:aws:cognito-idp:${self:provider.region}:${aws:accountId}:userpool/${self:provider.environment.COGNITO_USER_POOL_ID}
+#     - Effect: Allow
+#       Action:
+#         - dynamodb:PutItem
+#         - dynamodb:DescribeTable
+#       Resource: arn:aws:dynamodb:${self:provider.region}:${aws:accountId}:table/${self:provider.environment.DYNAMODB_TABLE_NAME}
+
+# functions:
+#   api:
+#     handler: src/handler.handler
+#     events:
+#       - http:
+#           path: /{proxy+}
+#           method: post
+#           cors: true
+
+# resources:
+#   Resources:
+#     # ${self:provider.environment.DYNAMODB_TABLE_NAME}:
+#     GroupsTable:  # Static resource name
+#       Type: AWS::DynamoDB::Table
+#       Properties:
+#         TableName: ${self:provider.environment.DYNAMODB_TABLE_NAME}
+#         AttributeDefinitions:
+#           - AttributeName: groupId
+#             AttributeType: S
+#         KeySchema:
+#           - AttributeName: groupId
+#             KeyType: HASH
+#         ProvisionedThroughput:
+#           ReadCapacityUnits: 5
+#           WriteCapacityUnits: 5
+#         StreamSpecification:
+#           StreamViewType: NEW_AND_OLD_IMAGES
+
+# plugins:
+#   - serverless-offline
+
+# package:
+#   include:
+#     - .env  
+#     - node_modules/**
+
