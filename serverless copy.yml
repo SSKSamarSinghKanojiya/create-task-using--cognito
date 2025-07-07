@@ -50,7 +50,7 @@ functions:
       - http:
           path: /{proxy+}  # Allow all HTTP paths (proxy mode)
           method: get  # GET method
-          authorizer: 
+          authorizer:
             arn: arn:aws:cognito-idp:${self:provider.region}:${aws:accountId}:userpool/${self:provider.environment.COGNITO_USER_POOL_ID}  # Cognito User Pool ARN
             identitySource: method.request.header.Authorization  # JWT token in Authorization header
           cors: true  # Enable CORS for cross-origin requests

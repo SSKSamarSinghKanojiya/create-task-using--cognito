@@ -1,4 +1,5 @@
 const groupService = require("../services/groupService");
+const { verifyTokenAndGroup } = require("../utils/jwtHelper");
 
 exports.createUserPool = async (req, res) => {
   const { poolName } = JSON.parse(req.body);  // Expecting poolName in the body of the request
@@ -256,7 +257,13 @@ exports.loginUser = async (req, res) => {
 
 // // Controller function to handle the request to list all groups
 exports.listGroups = async (req, res) => {
+  const token = req.headers.authorization?.split(' ')[1]
+
+  if (!token) {
+    return res.status(401).json({message:"Authorization token missing"})
+  }
   try {
+    const decoded = verifyTokenAndGroup(token,'Admins')
     // Call the service to get all groups
     const groups = await groupService.listAllGroups();
     
@@ -267,8 +274,9 @@ exports.listGroups = async (req, res) => {
     });
   } catch (error) {
     // If there's an error, return an error response
+     console.error('Error during token validation:', error);
     return res.status(500).json({
-      message: 'Failed to fetch groups',
+      message: 'Access Denied',
       error: error.message,
     });
   }
