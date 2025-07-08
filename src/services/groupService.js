@@ -14,6 +14,7 @@ const {
   CreateUserPoolCommand,
   AdminInitiateAuthCommand,
   ListGroupsCommand,
+  InitiateAuthCommand,
 } = require("@aws-sdk/client-cognito-identity-provider");
 
 const dynamoDb = new AWS.DynamoDB.DocumentClient();
@@ -24,11 +25,11 @@ const crypto = require('crypto');
 // const GROUP_TABLE = process.env.DYNAMODB_TABLE_NAME;
 const USER_POOL_ID = process.env.COGNITO_USER_POOL_ID;
 const CLIENT_ID = process.env.COGNITO_CLIENT_ID;
-const CLIENT_SECRET = process.env.COGNITO_CLIENT_SECRET
+// const CLIENT_SECRET = process.env.COGNITO_CLIENT_SECRET
 console.log("COGNITO_USER_POOL_ID:", process.env.COGNITO_USER_POOL_ID);
 console.log("DYNAMODB_TABLE_NAME:", process.env.DYNAMODB_TABLE_NAME);
 console.log("COGNITO_CLIENT_ID: ", process.env.COGNITO_CLIENT_ID);
-console.log("COGNITO_CLIENT_SECRET",process.env.COGNITO_CLIENT_SECRET);
+// console.log("COGNITO_CLIENT_SECRET",process.env.COGNITO_CLIENT_SECRET);
 // Function to compute the SECRET_HASH
 // const calculateSecretHash = (username) => {
 //   const message = CLIENT_ID + username;
@@ -190,7 +191,7 @@ exports.forgotPassword = async (email) => {
     const command = new ForgotPasswordCommand({
       ClientId: CLIENT_ID,
       Username: email,
-      SecretHash: secretHash,
+      // SecretHash: secretHash,
     });
     const response = await cognitoClient.send(command);
     console.log("Password reset initiated:", response);
@@ -219,7 +220,7 @@ exports.confirmForgotPassword = async (
       Username: email,
       ConfirmationCode: verificationCode,
       Password: newPassword,
-      SecretHash: secretHash,
+      // SecretHash: secretHash,
     });
     const response = await cognitoClient.send(command);
     console.log("Password reset confirmed:", response);
@@ -442,37 +443,43 @@ exports.loginUser = async (username, password) => {
   }
 };
 
-// Function to list all groups in the user pool
-// exports.listGroups = async () => {
-//   try {
-//     const params = {
-//       UserPoolId: USER_POOL_ID, // The user pool ID you want to list groups for
-//       // Optional: You can specify pagination parameters
-//       // Limit: 60,  // To limit the number of groups in one response (default is 60)
-//     };
+exports.loginUser1 = async (username, password) => {
+  try {
+    const authParams = {
+      AuthFlow: 'USER_PASSWORD_AUTH', // Use this flow for username and password authentication
+      ClientId: CLIENT_ID,
+      // UserPoolId: USER_POOL_ID,
+      AuthParameters: {
+        USERNAME: username,
+        PASSWORD: password,
+      },
+    };
 
-//     const command = new ListGroupsCommand(params);
-//     const response = await cognitoClient.send(command);
-//     console.log("Groups retrieved:", response);
+    // If Client Secret is configured, add it to the parameters
+    // if (CLIENT_SECRET) {
+    //   authParams.ClientSecret = CLIENT_SECRET;
+    // }
 
-//     return {
-//       message: "Groups retrieved successfully.",
-//       groups: response.Groups,
-//     };
-//   } catch (error) {
-//     console.error("Error listing groups:", error);
-//     return {
-//       message: "Error listing groups.",
-//       error: error.message,
-//     };
-//   }
-// };
+    // Create a command to initiate authentication
+    const command = new InitiateAuthCommand(authParams);
+    const response = await cognitoClient.send(command);
 
+    return {
+      message: 'Authentication successful',
+      accessToken: response.AuthenticationResult.AccessToken,
+      idToken: response.AuthenticationResult.IdToken,
+      refreshToken: response.AuthenticationResult.RefreshToken,
+    };
+  } catch (error) {
+    console.error('Error authenticating user:', error);
+    throw new Error('Error authenticating user: ' + error.message);
+  }
+};
 
-// This service function fetches all groups from the user pool
+// This function fetches all groups from the Cognito User Pool
 exports.listAllGroups = async () => {
   const params = {
-    UserPoolId: USER_POOL_ID,  // The User Pool ID
+    UserPoolId: USER_POOL_ID,  // Make sure to set your User Pool ID in environment variables
   };
 
   try {

@@ -9,7 +9,7 @@ const app = express();
 app.use(express.json());
 
 // Routes setup
-app.use("/api", groupRoutes);
+app.use("/", groupRoutes);
 
 // Global error handler
 app.use((err, req, res, next) => {

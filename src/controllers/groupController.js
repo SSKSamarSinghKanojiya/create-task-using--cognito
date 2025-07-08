@@ -1,5 +1,9 @@
 const groupService = require("../services/groupService");
 const { verifyTokenAndGroup } = require("../utils/jwtHelper");
+// const {CognitoIdentityProviderClient} = require("@aws-sdk/client-cognito-identity-provider")
+// const cognitoClient = new CognitoIdentityProviderClient({
+//   region: "us-east-1",
+// });
 
 exports.createUserPool = async (req, res) => {
   const { poolName } = JSON.parse(req.body);  // Expecting poolName in the body of the request
@@ -230,7 +234,7 @@ exports.loginUser = async (req, res) => {
 
   try {
     // Call the login service function
-    const result = await groupService.loginUser (username, password);
+    const result = await groupService.loginUser1(username, password);
     return res.status(200).json(result);  // Send successful response with JWT tokens
   } catch (error) {
     return res.status(500).json({
@@ -241,45 +245,34 @@ exports.loginUser = async (req, res) => {
 };
 
 
-// Controller for listing all groups
-// exports.listGroups = async (req, res) => {
-//   try {
-//     const result = await groupService.listGroups();
-//     return res.status(200).json(result);
-//   } catch (error) {
-//     return res.status(500).json({
-//       message: 'Failed to list groups',
-//       error: error.message,
-//     });
-//   }
-// };
 
-
-// // Controller function to handle the request to list all groups
 exports.listGroups = async (req, res) => {
-  const token = req.headers.authorization?.split(' ')[1]
+  const token = req.headers.authorization?.split(' ')[1];  // Extract the token from the Authorization header
 
+  // Check if token is missing
   if (!token) {
-    return res.status(401).json({message:"Authorization token missing"})
+    return res.status(401).json({ message: "Authorization token missing" });
   }
+
   try {
-    const decoded = verifyTokenAndGroup(token,'Admins')
-    // Call the service to get all groups
-    const groups = await groupService.listAllGroups();
-    
-    // Return the groups in the response
+    // Step 1: Verify the token and check the user's group (e.g., "Group A")
+    const decoded = await verifyTokenAndGroup(token, 'Group_A');  // Check if user belongs to "Group A"
+
+    // Step 2: Call the service to get all groups from Cognito
+    const groups = await groupService.listAllGroups();  // Fetch the groups
+
+    // Step 3: Return the groups in the response
     return res.status(200).json({
       message: 'Groups fetched successfully',
       groups: groups,  // Send the list of groups
     });
   } catch (error) {
-    // If there's an error, return an error response
-     console.error('Error during token validation:', error);
+    console.error('Error during token validation or group fetch:', error);
+
+    // Step 4: Return an error response if token validation fails or any other error occurs
     return res.status(500).json({
       message: 'Access Denied',
-      error: error.message,
+      error: error.message,  // Send the error message in the response
     });
   }
 };
-
-

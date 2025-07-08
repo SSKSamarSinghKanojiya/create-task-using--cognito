@@ -1,37 +1,57 @@
-const jwt = require('jsonwebtoken');  // Import the jsonwebtoken library for decoding JWT tokens
+require("dotenv").config();
+const jwt = require('jsonwebtoken');  // JWT library to decode and verify the token
+const jwksClient = require('jwks-rsa');  // Library to get public keys for RS256 verification
 
-/**
- * Decodes and verifies a JWT token.
- * @param {string} token - The JWT token to decode and verify.
- * @param {string} requiredGroup - The required group that the user must belong to (e.g., 'Admins').
- * @returns {object} - The decoded JWT token if the user belongs to the required group.
- * @throws {Error} - Throws error if the user is not in the required group.
- */
-const verifyTokenAndGroup = (token, requiredGroup) => {
+// Create a JWKS client to retrieve Cognito public keys
+const client = jwksClient({
+  jwksUri: `https://cognito-idp.us-east-1.amazonaws.com/${process.env.COGNITO_USER_POOL_ID}/.well-known/jwks.json`  // Replace with your actual Cognito User Pool ID
+});
+
+// Function to get the public key for a given JWT header
+const getKey = (header, callback) => {
+  client.getSigningKey(header.kid, (err, key) => {
+    if (err) {
+      callback(err);
+    } else {
+      const signingKey = key.publicKey || key.rsaPublicKey;
+      callback(null, signingKey);
+    }
+  });
+};
+
+// Function to verify the token and check if the user belongs to a specific group
+const verifyTokenAndGroup = async (token, groupName) => {
   try {
-    // Decode the JWT token without verifying its signature (you should verify the token signature in production)
-    const decoded = jwt.decode(token, { complete: true });
+    // Decode the JWT header to extract the 'kid' (key ID)
+    const decodedHeader = jwt.decode(token, { complete: true }).header;
 
-    if (!decoded) {
-      throw new Error('Invalid token');
+    // Get the key for the token from Cognito's JWKS
+    const key = await new Promise((resolve, reject) => {
+      getKey(decodedHeader, (err, signingKey) => {
+        if (err) reject(err);
+        else resolve(signingKey);
+      });
+    });
+
+    // Verify the token using the retrieved public key and the RS256 algorithm
+    const decoded = jwt.verify(token, key, { algorithms: ['RS256'] });
+
+    // Check if the user's groups are available in the decoded token
+    const userGroups = decoded["cognito:groups"];  // The claim that holds the groups the user is in
+
+    // If userGroups exists and includes the desired group, return decoded data
+    if (!userGroups || !userGroups.includes(groupName)) {
+      throw new Error(`User is not part of the ${groupName} group`);
     }
 
-    // Extract user groups from the decoded JWT token
-    const userGroups = decoded.payload['cognito:groups'];  // Cognito groups are stored in 'cognito:groups' claim
-    console.log(userGroups);
-    
-    // Check if the user is in the required group
-    if (!userGroups || !userGroups.includes(requiredGroup)) {
-      throw new Error(`Access Denied: User is not in the ${requiredGroup} group`);
-    }
+    // Return the decoded token (you can access user details here)
+    return decoded;
 
-    return decoded.payload;  // Return the decoded JWT token (user data)
   } catch (error) {
-    console.error('Error decoding token:', error);
-    throw new Error('Unauthorized: ' + error.message);
+    console.error("Token validation failed:", error);  // Log the error
+    throw new Error("Token validation failed: " + error.message);  // Propagate the error
   }
 };
 
-module.exports = {
-  verifyTokenAndGroup,
-};
+module.exports = { verifyTokenAndGroup };
+
